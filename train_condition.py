@@ -8,7 +8,7 @@ import argparse
 import os
 import time
 from cp_dataset import CPDataset, CPDatasetTest, CPDataLoader
-from networks import MTVITON, ImprovedMTVITON, VGGLoss, GANLoss, load_checkpoint, save_checkpoint, define_D
+from networks import ConditionGenerator, VGGLoss, GANLoss, load_checkpoint, save_checkpoint, define_D
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
 from utils import *
@@ -53,7 +53,7 @@ def get_opt():
     parser.add_argument('-b', '--batch-size', type=int, default=8)
     parser.add_argument('--fp16', action='store_true', help='use amp')
 
-    parser.add_argument("--dataroot", default="./dataset/")
+    parser.add_argument("--dataroot", default="./data/")
     parser.add_argument("--datamode", default="train")
     parser.add_argument("--data_list", default="train_pairs_zalando.txt")
     parser.add_argument("--fine_width", type=int, default=192)
@@ -487,7 +487,7 @@ def main():
     input1_nc = 4  # cloth + cloth-mask
     input2_nc = opt.semantic_nc + 3  # parse_agnostic + densepose
     # mtviton = MTVITON(opt, input1_nc=4, input2_nc=input2_nc, output_nc=opt.output_nc, ngf=96, norm_layer=nn.BatchNorm2d)
-    mtviton = ImprovedMTVITON(opt, input1_nc=4, input2_nc=input2_nc, output_nc=opt.output_nc, ngf=96, norm_layer=nn.BatchNorm2d)
+    mtviton = ConditionGenerator(opt, input1_nc=4, input2_nc=input2_nc, output_nc=opt.output_nc, ngf=96, norm_layer=nn.BatchNorm2d)
     D = define_D(input_nc=input1_nc + input2_nc + opt.output_nc, Ddownx2 = opt.Ddownx2, Ddropout = opt.Ddropout, n_layers_D=3, spectral = opt.spectral, num_D = opt.num_D)
     
     # Load Checkpoint

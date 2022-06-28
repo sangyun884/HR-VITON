@@ -2,15 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import init
-from torch.autograd import Variable
-from torchvision import models
-import os
 from torch.nn.utils import spectral_norm
 import numpy as np
-
-import functools
-
-import re
 
 
 class BaseNetwork(nn.Module):
@@ -79,9 +72,9 @@ class MaskNorm(nn.Module):
         return normalized_foreground + normalized_background
 
 
-class ALIASNorm(nn.Module):
+class SPADENorm(nn.Module):
     def __init__(self, norm_type, norm_nc, label_nc):
-        super(ALIASNorm, self).__init__()
+        super(SPADENorm, self).__init__()
 
         self.noise_scale = nn.Parameter(torch.zeros(norm_nc))
 
@@ -95,7 +88,7 @@ class ALIASNorm(nn.Module):
             self.param_free_norm = MaskNorm(norm_nc)
         else:
             raise ValueError(
-                "'{}' is not a recognized parameter-free normalization type in ALIASNorm".format(param_free_norm_type)
+                "'{}' is not a recognized parameter-free normalization type in SPADENorm".format(param_free_norm_type)
             )
 
         nhidden = 128
@@ -125,9 +118,9 @@ class ALIASNorm(nn.Module):
         return output
 
 
-class ALIASResBlock(nn.Module):
+class SPADEResBlock(nn.Module):
     def __init__(self, opt, input_nc, output_nc, use_mask_norm=True):
-        super(ALIASResBlock, self).__init__()
+        super(SPADEResBlock, self).__init__()
 
         self.learned_shortcut = (input_nc != output_nc)
         middle_nc = min(input_nc, output_nc)
@@ -150,10 +143,10 @@ class ALIASResBlock(nn.Module):
             subnorm_type = 'aliasmask'
             gen_semantic_nc = gen_semantic_nc + 1
 
-        self.norm_0 = ALIASNorm(subnorm_type, input_nc, gen_semantic_nc)
-        self.norm_1 = ALIASNorm(subnorm_type, middle_nc, gen_semantic_nc)
+        self.norm_0 = SPADENorm(subnorm_type, input_nc, gen_semantic_nc)
+        self.norm_1 = SPADENorm(subnorm_type, middle_nc, gen_semantic_nc)
         if self.learned_shortcut:
-            self.norm_s = ALIASNorm(subnorm_type, input_nc, gen_semantic_nc)
+            self.norm_s = SPADENorm(subnorm_type, input_nc, gen_semantic_nc)
 
         self.relu = nn.LeakyReLU(0.2)
 
@@ -176,9 +169,9 @@ class ALIASResBlock(nn.Module):
         return output
 
 
-class ALIASGenerator(BaseNetwork):
+class SPADEGenerator(BaseNetwork):
     def __init__(self, opt, input_nc):
-        super(ALIASGenerator, self).__init__()
+        super(SPADEGenerator, self).__init__()
         self.num_upsampling_layers = opt.num_upsampling_layers
 
         self.sh, self.sw = self.compute_latent_vector_size(opt)
@@ -188,17 +181,17 @@ class ALIASGenerator(BaseNetwork):
         for i in range(1, 8):
             self.add_module('conv_{}'.format(i), nn.Conv2d(input_nc, 16, kernel_size=3, padding=1))
 
-        self.head_0 = ALIASResBlock(opt, nf * 16, nf * 16, use_mask_norm=False)
+        self.head_0 = SPADEResBlock(opt, nf * 16, nf * 16, use_mask_norm=False)
 
-        self.G_middle_0 = ALIASResBlock(opt, nf * 16 + 16, nf * 16, use_mask_norm=False)
-        self.G_middle_1 = ALIASResBlock(opt, nf * 16 + 16, nf * 16, use_mask_norm=False)
+        self.G_middle_0 = SPADEResBlock(opt, nf * 16 + 16, nf * 16, use_mask_norm=False)
+        self.G_middle_1 = SPADEResBlock(opt, nf * 16 + 16, nf * 16, use_mask_norm=False)
 
-        self.up_0 = ALIASResBlock(opt, nf * 16 + 16, nf * 8, use_mask_norm=False)
-        self.up_1 = ALIASResBlock(opt, nf * 8 + 16, nf * 4, use_mask_norm=False)
-        self.up_2 = ALIASResBlock(opt, nf * 4 + 16, nf * 2, use_mask_norm=False)
-        self.up_3 = ALIASResBlock(opt, nf * 2 + 16, nf * 1, use_mask_norm=False)
+        self.up_0 = SPADEResBlock(opt, nf * 16 + 16, nf * 8, use_mask_norm=False)
+        self.up_1 = SPADEResBlock(opt, nf * 8 + 16, nf * 4, use_mask_norm=False)
+        self.up_2 = SPADEResBlock(opt, nf * 4 + 16, nf * 2, use_mask_norm=False)
+        self.up_3 = SPADEResBlock(opt, nf * 2 + 16, nf * 1, use_mask_norm=False)
         if self.num_upsampling_layers == 'most':
-            self.up_4 = ALIASResBlock(opt, nf * 1 + 16, nf // 2, use_mask_norm=False)
+            self.up_4 = SPADEResBlock(opt, nf * 1 + 16, nf // 2, use_mask_norm=False)
             nf = nf // 2
 
         self.conv_img = nn.Conv2d(nf, 3, kernel_size=3, padding=1)
@@ -251,7 +244,6 @@ class ALIASGenerator(BaseNetwork):
 ########################################################################
     
 class NLayerDiscriminator(BaseNetwork):
-
 
     def __init__(self, opt):
         super().__init__()
@@ -401,9 +393,7 @@ class GANLoss(nn.Module):
         else:
             return self.loss(input, target_is_real, for_discriminator)
 
-    
-    
-    
+
 def get_nonspade_norm_layer(norm_type='instance'):
     def get_out_channel(layer):
         if hasattr(layer, 'out_channels'):

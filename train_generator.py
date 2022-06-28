@@ -8,9 +8,8 @@ import os
 import time
 from cp_dataset import CPDataset, CPDataLoader
 from cp_dataset_test import CPDatasetTest
-from flow_visualize import test
-from networks import ImprovedMTVITON, VGGLoss, load_checkpoint, save_checkpoint, make_grid
-from network_generator import ALIASGenerator, MultiscaleDiscriminator, GANLoss
+from networks import ConditionGenerator, VGGLoss, load_checkpoint, save_checkpoint, make_grid
+from network_generator import SPADEGenerator, MultiscaleDiscriminator, GANLoss
 
 from sync_batchnorm import DataParallelWithCallback
 from tensorboardX import SummaryWriter
@@ -42,7 +41,7 @@ def get_opt():
     parser.add_argument('-b', '--batch_size', type=int, default=8)
     parser.add_argument('--fp16', action='store_true', help='use amp')
 
-    parser.add_argument("--dataroot", default="./dataset/")
+    parser.add_argument("--dataroot", default="./data/")
     parser.add_argument("--datamode", default="train")
     parser.add_argument("--data_list", default="train_pairs_zalando.txt")
     parser.add_argument("--fine_width", type=int, default=768)
@@ -647,12 +646,12 @@ def main():
     if not opt.GT:
         input1_nc = 4  # cloth + cloth-mask
         input2_nc = opt.semantic_nc + 3  # parse_agnostic + densepose
-        mtviton = ImprovedMTVITON(opt, input1_nc=input1_nc, input2_nc=input2_nc, output_nc=13, ngf=96, norm_layer=nn.BatchNorm2d)
+        mtviton = ConditionGenerator(opt, input1_nc=input1_nc, input2_nc=input2_nc, output_nc=13, ngf=96, norm_layer=nn.BatchNorm2d)
         # Load Checkpoint
         load_checkpoint(mtviton, opt.mtviton_checkpoint)
 
     # Generator model
-    generator = ALIASGenerator(opt, 3+3+3)
+    generator = SPADEGenerator(opt, 3+3+3)
     generator.print_network()
     if len(opt.gpu_ids) > 0:
         assert(torch.cuda.is_available())

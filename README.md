@@ -5,9 +5,7 @@
 
 > **High-Resolution Virtual Try-On with Misalignment and Occlusion-Handled Conditions**<br>
 > [Sangyun Lee](https://github.com/sangyun884)\*<sup>1</sup>, [Gyojung Gu](https://github.com/koo616)\*<sup>2,3</sup>, [Sunghyun Park](https://psh01087.github.io)<sup>2</sup>, [Seunghwan Choi](https://github.com/shadow2496)<sup>2</sup>, [Jaegul Choo](https://sites.google.com/site/jaegulchoo)<sup>2</sup><br>
-> <sup>1</sup>Soongsil University<br>
-> <sup>2</sup>KAIST<br>
-> <sup>3</sup>Nestyle<br>
+> <sup>1</sup>Soongsil University, <sup>2</sup>KAIST, <sup>3</sup>Nestyle<br>
 > (* indicates equal contribution)
 
 > Paper: {arxiv url}<br>
@@ -37,6 +35,7 @@ We train and evaluate our model using the dataset from [VITON-HD: High-Resolutio
 
 To download the dataset, please check the following link https://github.com/shadow2496/VITON-HD.
 
+We assume that you have downloaded it into `./data`.
 
 ## Inference
 
@@ -47,27 +46,23 @@ Here are the download links for each model checkpoint:
 - AlexNet (LPIPS): [link](https://drive.google.com/file/d/1FF3BBSDIA3uavmAiuMH6YFCv09Lt8jUr/view?usp=sharing), we assume that you have downloaded it into `./eval_models/weights/v0.1`.
 
 ```python
-python3 test_SPADE.py --occlusion --mtviton_checkpoint {condition generator ckpt} --gpu_ids {gpu_ids} --gen_checkpoint {image generator ckpt} --datasetting unpaired --dataroot {dataset_path} --data_list {pair_list_textfile}
+python3 test_generator.py --occlusion --mtviton_checkpoint {condition generator ckpt} --gpu_ids {gpu_ids} --gen_checkpoint {image generator ckpt} --datasetting unpaired --dataroot {dataset_path} --data_list {pair_list_textfile}
 ```
 
 ## Train try-on condition generator
 
 ```python
-python3 train.py --gpu_ids {gpu_ids} --Ddownx2 --Ddropout --lasttvonly --interflowloss --occlusion
+python3 train_condition.py --gpu_ids {gpu_ids} --Ddownx2 --Ddropout --lasttvonly --interflowloss --occlusion
 ```
 
 ## Train try-on image generator
 
 ```python
-python3 train_generator.py --name test -b 4 --j 8 --gpu_ids {gpu_ids} --fp16 --dataroot __ --test_dataroot __ --mtviton_checkpoint <condition generator ckpt path> --occlusion
+python3 train_generator.py --name test -b 4 --j 8 --gpu_ids {gpu_ids} --fp16 --mtviton_checkpoint {condition generator ckpt path} --occlusion
 ```
 This stage takes approximately 4 days with two RTX 3090 GPUs. Tested environment: PyTorch 1.8.2+cu111.
 
 To use "--fp16" option, you should install apex library.
-
-## License
-
-All material is made available under [Creative Commons BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) license by [NeStyle Inc](http://www.nestyle.ai). You can **use, redistribute, and adapt** the material for **non-commercial purposes**, as long as you give appropriate credit by **citing our paper** and **indicate any changes** that you've made.
 
 ## Citation
 

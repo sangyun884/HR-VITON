@@ -2,20 +2,13 @@
 import torch
 import torch.nn as nn
 
-from torchvision.utils import make_grid
-from networks import make_grid as mkgrid
-
 import argparse
 import os
 import time
 from cp_dataset import CPDataset, CPDataLoader
-from networks import MTVITON, ImprovedMTVITON, VGGLoss, GANLoss, load_checkpoint, save_checkpoint, define_D
-from tqdm import tqdm
-from tensorboardX import SummaryWriter
-from utils import *
-from torch.utils.data import Subset
-import copy
+from networks import ConditionGenerator, load_checkpoint, define_D
 
+from utils import *
 
 
 def get_opt():
@@ -27,7 +20,7 @@ def get_opt():
     parser.add_argument('-b', '--batch-size', type=int, default=8)
     parser.add_argument('--fp16', action='store_true', help='use amp')
 
-    parser.add_argument("--dataroot", default="/home/nas1_userB/dataset/")
+    parser.add_argument("--dataroot", default="./data")
     parser.add_argument("--datamode", default="train")
     parser.add_argument("--data_list", default="train_pairs_zalando.txt")
     parser.add_argument("--fine_width", type=int, default=192)
@@ -58,7 +51,7 @@ def get_opt():
     parser.add_argument('--spectral', action='store_true', help="Apply spectral normalization to D")
 
     parser.add_argument("--test_datasetting", default="unpaired")
-    parser.add_argument("--test_dataroot", default="/home/nas2_userF/gyojunggu/WUTON/data/zalando-hd-resize")
+    parser.add_argument("--test_dataroot", default="./data/zalando-hd-resize")
     parser.add_argument("--test_data_list", default="test_pairs.txt")
     
     opt = parser.parse_args()
@@ -148,14 +141,11 @@ def main():
     train_dataset = CPDataset(opt)
     train_loader = CPDataLoader(opt, train_dataset)
     
-
-     
-    
     # Model
     input1_nc = 4  # cloth + cloth-mask
     input2_nc = opt.semantic_nc + 3  # parse_agnostic + densepose
     D = define_D(input_nc=input1_nc + input2_nc + opt.output_nc, Ddownx2 = opt.Ddownx2, Ddropout = opt.Ddropout, n_layers_D=3, spectral = opt.spectral, num_D = opt.num_D)
-    mtviton = ImprovedMTVITON(opt, input1_nc=4, input2_nc=input2_nc, output_nc=opt.output_nc, ngf=96, norm_layer=nn.BatchNorm2d)
+    mtviton = ConditionGenerator(opt, input1_nc=4, input2_nc=input2_nc, output_nc=opt.output_nc, ngf=96, norm_layer=nn.BatchNorm2d)
     # Load Checkpoint
     load_checkpoint(D, opt.D_checkpoint)
     load_checkpoint(mtviton, opt.mtviton_checkpoint)

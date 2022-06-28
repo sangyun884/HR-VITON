@@ -18,7 +18,7 @@ def get_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--evaluation', default='LPIPS')
     parser.add_argument('--predict_dir', default='./result/bg_ver1/output/')
-    parser.add_argument('--ground_truth_dir', default='/home/nas2_userF/gyojunggu/WUTON/data/zalando-hd-resize/test/image')
+    parser.add_argument('--ground_truth_dir', default='./data/zalando-hd-resize/test/image')
     parser.add_argument('--resolution', type=int, default=1024)
     
 
