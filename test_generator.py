@@ -10,7 +10,6 @@ from cp_dataset_test import CPDatasetTest, CPDataLoader
 
 from networks import ConditionGenerator, load_checkpoint, make_grid
 from network_generator import SPADEGenerator
-from tqdm import tqdm
 from tensorboardX import SummaryWriter
 from utils import *
 
@@ -20,8 +19,6 @@ from collections import OrderedDict
 def remove_overlap(seg_out, warped_cm):
     
     assert len(warped_cm.shape) == 4
-    # seg_out_onehot = F.softmax(seg_out * 100000, dim=1)[:, 1:, :, :] # Exclude the bg channel
-    # warped_cm = warped_cm - seg_out_onehot.sum(dim=1, keepdim=True) * warped_cm
     
     warped_cm = warped_cm - (torch.cat([seg_out[:, 1:3, :, :], seg_out[:, 5:, :, :]], dim=1)).sum(dim=1, keepdim=True) * warped_cm
     return warped_cm
@@ -43,7 +40,7 @@ def get_opt():
 
     parser.add_argument('--tensorboard_dir', type=str, default='tensorboard', help='save tensorboard infos')
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints', help='save checkpoint infos')
-    parser.add_argument('--mtviton_checkpoint', type=str, default='', help='mtviton checkpoint')
+    parser.add_argument('--tocg_checkpoint', type=str, default='', help='tocg checkpoint')
     parser.add_argument('--gen_checkpoint', type=str, default='./gen_step_110000.pth', help='G checkpoint')  
 
     parser.add_argument("--tensorboard_count", type=int, default=100)
@@ -52,7 +49,6 @@ def get_opt():
     parser.add_argument("--output_nc", type=int, default=13)
     parser.add_argument('--gen_semantic_nc', type=int, default=7, help='# of input label classes without unknown class')
     
-    
     # network
     parser.add_argument("--warp_feature", choices=['encoder', 'T1'], default="T1")
     parser.add_argument("--out_layer", choices=['relu', 'conv'], default="relu")
@@ -60,7 +56,6 @@ def get_opt():
     # training
     parser.add_argument("--clothmask_composition", type=str, choices=['no_composition', 'detach', 'warp_grad'], default='warp_grad')
         
-
     # Hyper-parameters
     parser.add_argument('--upsample', type=str, default='bilinear', choices=['nearest', 'bilinear'])
     parser.add_argument('--occlusion', action='store_true', help="Occlusion handling")
@@ -87,24 +82,21 @@ def load_checkpoint_G(model, checkpoint_path):
     model.cuda()
 
 
-def test(opt, test_loader, board, mtviton, generator):
-    """
-        Test MTVITON + generator
-    """
+def test(opt, test_loader, board, tocg, generator):
     gauss = tgm.image.GaussianBlur((15, 15), (3, 3))
     gauss = gauss.cuda()
     
     # Model
-    mtviton.cuda()
-    mtviton.eval()
+    tocg.cuda()
+    tocg.eval()
     generator.eval()
     
     if opt.output_dir is not None:
         output_dir = opt.output_dir
     else:
-        output_dir = os.path.join('./output', opt.mtviton_checkpoint.split('/')[-2], opt.mtviton_checkpoint.split('/')[-1],
+        output_dir = os.path.join('./output', opt.tocg_checkpoint.split('/')[-2], opt.tocg_checkpoint.split('/')[-1],
                             opt.datamode, opt.datasetting, 'generator', 'output')
-    grid_dir = os.path.join('./output', opt.mtviton_checkpoint.split('/')[-2], opt.mtviton_checkpoint.split('/')[-1],
+    grid_dir = os.path.join('./output', opt.tocg_checkpoint.split('/')[-2], opt.tocg_checkpoint.split('/')[-1],
                              opt.datamode, opt.datasetting, 'generator', 'grid')
     
     os.makedirs(grid_dir, exist_ok=True)
@@ -144,7 +136,7 @@ def test(opt, test_loader, board, mtviton, generator):
             input2 = torch.cat([input_parse_agnostic_down, densepose_down], 1)
 
             # forward
-            flow_list, fake_segmap, warped_cloth_paired, warped_clothmask_paired = mtviton(input1, input2)
+            flow_list, fake_segmap, warped_cloth_paired, warped_clothmask_paired = tocg(input1, input2)
             
             # warped cloth mask one hot 
             warped_cm_onehot = torch.FloatTensor((warped_clothmask_paired.detach().cpu().numpy() > 0.5).astype(np.float)).cuda()
@@ -204,7 +196,6 @@ def test(opt, test_loader, board, mtviton, generator):
                                         (pose_map[i].cpu()/2 +0.5), (warped_cloth[i].cpu()/2 + 0.5), (agnostic[i].cpu()/2 + 0.5),
                                         (im[i]/2 +0.5), (output[i].cpu()/2 +0.5)],
                                         nrow=4)
-                #board.add_images(f'test_images/{i}', grid.unsqueeze(0), step + 1)
                 unpaired_name = (inputs['c_name']['paired'][i].split('.')[0] + '_' + inputs['c_name'][opt.datasetting][i].split('.')[0] + '.png')
                 save_image(grid, os.path.join(grid_dir, unpaired_name))
                 unpaired_names.append(unpaired_name)
@@ -231,13 +222,13 @@ def main():
     # visualization
     if not os.path.exists(opt.tensorboard_dir):
         os.makedirs(opt.tensorboard_dir)
-    board = SummaryWriter(log_dir=os.path.join(opt.tensorboard_dir, opt.mtviton_checkpoint.split('/')[-2], opt.mtviton_checkpoint.split('/')[-1], opt.datamode, opt.datasetting))
+    board = SummaryWriter(log_dir=os.path.join(opt.tensorboard_dir, opt.tocg_checkpoint.split('/')[-2], opt.tocg_checkpoint.split('/')[-1], opt.datamode, opt.datasetting))
 
     ## Model
-    # mtviton
+    # tocg
     input1_nc = 4  # cloth + cloth-mask
     input2_nc = opt.semantic_nc + 3  # parse_agnostic + densepose
-    mtviton = ConditionGenerator(opt, input1_nc=input1_nc, input2_nc=input2_nc, output_nc=opt.output_nc, ngf=96, norm_layer=nn.BatchNorm2d)
+    tocg = ConditionGenerator(opt, input1_nc=input1_nc, input2_nc=input2_nc, output_nc=opt.output_nc, ngf=96, norm_layer=nn.BatchNorm2d)
        
     # generator
     opt.semantic_nc = 7
@@ -245,11 +236,11 @@ def main():
     generator.print_network()
        
     # Load Checkpoint
-    load_checkpoint(mtviton, opt.mtviton_checkpoint)
+    load_checkpoint(tocg, opt.tocg_checkpoint)
     load_checkpoint_G(generator, opt.gen_checkpoint)
 
     # Train
-    test(opt, test_loader, board, mtviton, generator)
+    test(opt, test_loader, board, tocg, generator)
 
     print("Finished testing!")
 

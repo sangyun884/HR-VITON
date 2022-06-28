@@ -38,8 +38,6 @@ def iou_metric(y_pred_batch, y_true_batch):
 def remove_overlap(seg_out, warped_cm):
     
     assert len(warped_cm.shape) == 4
-    # seg_out_onehot = F.softmax(seg_out * 100000, dim=1)[:, 1:, :, :] # Exclude the bg channel
-    # warped_cm = warped_cm - seg_out_onehot.sum(dim=1, keepdim=True) * warped_cm
     
     warped_cm = warped_cm - (torch.cat([seg_out[:, 1:3, :, :], seg_out[:, 5:, :, :]], dim=1)).sum(dim=1, keepdim=True) * warped_cm
     return warped_cm
@@ -61,7 +59,7 @@ def get_opt():
 
     parser.add_argument('--tensorboard_dir', type=str, default='tensorboard', help='save tensorboard infos')
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints', help='save checkpoint infos')
-    parser.add_argument('--mtviton_checkpoint', type=str, default='', help='mtviton checkpoint')
+    parser.add_argument('--tocg_checkpoint', type=str, default='', help='tocg checkpoint')
 
     parser.add_argument("--tensorboard_count", type=int, default=100)
     parser.add_argument("--display_count", type=int, default=100)
@@ -110,13 +108,10 @@ def get_opt():
     return opt
 
 
-def train(opt, train_loader, test_loader, val_loader, board, mtviton, D):
-    """
-        Train MTVITON
-    """
+def train(opt, train_loader, test_loader, val_loader, board, tocg, D):
     # Model
-    mtviton.cuda()
-    mtviton.train()
+    tocg.cuda()
+    tocg.train()
     D.cuda()
     D.train()
 
@@ -129,7 +124,7 @@ def train(opt, train_loader, test_loader, val_loader, board, mtviton, D):
         criterionGAN = GANLoss(use_lsgan=True, tensor=torch.cuda.FloatTensor if opt.gpu_ids else torch.Tensor)
 
     # optimizer
-    optimizer_G = torch.optim.Adam(mtviton.parameters(), lr=opt.G_lr, betas=(0.5, 0.999))
+    optimizer_G = torch.optim.Adam(tocg.parameters(), lr=opt.G_lr, betas=(0.5, 0.999))
     optimizer_D = torch.optim.Adam(D.parameters(), lr=opt.D_lr, betas=(0.5, 0.999))
     
 
@@ -158,7 +153,7 @@ def train(opt, train_loader, test_loader, val_loader, board, mtviton, D):
         input2 = torch.cat([parse_agnostic, densepose], 1)
 
         # forward
-        flow_list, fake_segmap, warped_cloth_paired, warped_clothmask_paired = mtviton(input1, input2)
+        flow_list, fake_segmap, warped_cloth_paired, warped_clothmask_paired = tocg(input1, input2)
         
         # warped cloth mask one hot 
         
@@ -234,11 +229,7 @@ def train(opt, train_loader, test_loader, val_loader, board, mtviton, D):
                     x_tv = torch.abs(flow[:, :, 1:, :] - flow[:, :, :-1, :]).mean()
                     loss_tv = loss_tv + y_tv + x_tv
             
-            # if not opt.lasttvonly:
-            #     for flow in flow_list[:-1]:
-            #         y_tv = torch.abs(flow[:, 1:, :, :] - flow[:, :-1, :, :]).mean()
-            #         x_tv = torch.abs(flow[:, :, 1:, :] - flow[:, :, :-1, :]).mean()
-            #         loss_tv = loss_tv + y_tv + x_tv
+
         N, _, iH, iW = c_paired.size()
         # Intermediate flow loss
         if opt.interflowloss:
@@ -303,7 +294,7 @@ def train(opt, train_loader, test_loader, val_loader, board, mtviton, D):
                 
                 # discriminator
                 with torch.no_grad():
-                    _, fake_segmap, _, _ = mtviton(input1, input2)
+                    _, fake_segmap, _, _ = tocg(input1, input2)
                 fake_segmap_softmax = torch.softmax(fake_segmap, 1)
                 
                 # loss discriminator
@@ -319,7 +310,7 @@ def train(opt, train_loader, test_loader, val_loader, board, mtviton, D):
                 optimizer_D.step()
         # Vaildation
         if (step + 1) % opt.val_count == 0:
-            mtviton.eval()
+            tocg.eval()
             iou_list = []
             with torch.no_grad():
                 for cnt in range(2000//opt.batch_size):
@@ -345,7 +336,7 @@ def train(opt, train_loader, test_loader, val_loader, board, mtviton, D):
                     input2 = torch.cat([parse_agnostic, densepose], 1)
                     
                     # forward
-                    flow_list, fake_segmap, warped_cloth_paired, warped_clothmask_paired = mtviton(input1, input2)
+                    flow_list, fake_segmap, warped_cloth_paired, warped_clothmask_paired = tocg(input1, input2)
                 
                     # fake segmap cloth channel * warped clothmask
                     if opt.clothmask_composition != 'no_composition':
@@ -363,7 +354,7 @@ def train(opt, train_loader, test_loader, val_loader, board, mtviton, D):
                     iou = iou_metric(F.softmax(fake_segmap, dim=1).detach(), label)
                     iou_list.append(iou.item())
 
-            mtviton.train()
+            tocg.train()
             board.add_scalar('val/iou', np.mean(iou_list), step + 1)
         
         # tensorboard
@@ -405,15 +396,14 @@ def train(opt, train_loader, test_loader, val_loader, board, mtviton, D):
                 # visualization
                 im = inputs['image']
 
-                mtviton.eval()
+                tocg.eval()
                 with torch.no_grad():
                     # inputs
                     input1 = torch.cat([c_paired, cm_paired], 1)
                     input2 = torch.cat([parse_agnostic, densepose], 1)
 
                     # forward
-                    flow_list, fake_segmap, warped_cloth_paired, warped_clothmask_paired = mtviton(input1, input2)
-                    
+                    flow_list, fake_segmap, warped_cloth_paired, warped_clothmask_paired = tocg(input1, input2)
                     
                     warped_cm_onehot = torch.FloatTensor((warped_clothmask_paired.detach().cpu().numpy() > 0.5).astype(np.float)).cuda()
                     if opt.clothmask_composition != 'no_composition':
@@ -441,7 +431,7 @@ def train(opt, train_loader, test_loader, val_loader, board, mtviton, D):
                                     visualize_segmap(label.cpu(), batch=i), visualize_segmap(fake_segmap.cpu(), batch=i), (im[i]/2 +0.5), (misalign[i].cpu().detach()).expand(3, -1, -1)],
                                         nrow=4)
                     board.add_images(f'test_images/{i}', grid.unsqueeze(0), step + 1)
-                mtviton.train()
+                tocg.train()
         
         # display
         if (step + 1) % opt.display_count == 0:
@@ -452,7 +442,7 @@ def train(opt, train_loader, test_loader, val_loader, board, mtviton, D):
 
         # save
         if (step + 1) % opt.save_count == 0:
-            save_checkpoint(mtviton, os.path.join(opt.checkpoint_dir, opt.name, 'mtviton_step_%06d.pth' % (step + 1)))
+            save_checkpoint(tocg, os.path.join(opt.checkpoint_dir, opt.name, 'tocg_step_%06d.pth' % (step + 1)))
             save_checkpoint(D, os.path.join(opt.checkpoint_dir, opt.name, 'D_step_%06d.pth' % (step + 1)))
 
 def main():
@@ -486,19 +476,18 @@ def main():
     # Model
     input1_nc = 4  # cloth + cloth-mask
     input2_nc = opt.semantic_nc + 3  # parse_agnostic + densepose
-    # mtviton = MTVITON(opt, input1_nc=4, input2_nc=input2_nc, output_nc=opt.output_nc, ngf=96, norm_layer=nn.BatchNorm2d)
-    mtviton = ConditionGenerator(opt, input1_nc=4, input2_nc=input2_nc, output_nc=opt.output_nc, ngf=96, norm_layer=nn.BatchNorm2d)
+    tocg = ConditionGenerator(opt, input1_nc=4, input2_nc=input2_nc, output_nc=opt.output_nc, ngf=96, norm_layer=nn.BatchNorm2d)
     D = define_D(input_nc=input1_nc + input2_nc + opt.output_nc, Ddownx2 = opt.Ddownx2, Ddropout = opt.Ddropout, n_layers_D=3, spectral = opt.spectral, num_D = opt.num_D)
     
     # Load Checkpoint
-    if not opt.mtviton_checkpoint == '' and os.path.exists(opt.mtviton_checkpoint):
-        load_checkpoint(mtviton, opt.mtviton_checkpoint)
+    if not opt.tocg_checkpoint == '' and os.path.exists(opt.tocg_checkpoint):
+        load_checkpoint(tocg, opt.tocg_checkpoint)
 
     # Train
-    train(opt, train_loader, val_loader, test_loader, board, mtviton, D)
+    train(opt, train_loader, val_loader, test_loader, board, tocg, D)
 
     # Save Checkpoint
-    save_checkpoint(mtviton, os.path.join(opt.checkpoint_dir, opt.name, 'mtviton_final.pth'))
+    save_checkpoint(tocg, os.path.join(opt.checkpoint_dir, opt.name, 'tocg_final.pth'))
     save_checkpoint(D, os.path.join(opt.checkpoint_dir, opt.name, 'D_final.pth'))
     print("Finished training %s!" % opt.name)
 

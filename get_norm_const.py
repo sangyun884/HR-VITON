@@ -28,8 +28,8 @@ def get_opt():
 
     parser.add_argument('--tensorboard_dir', type=str, default='tensorboard', help='save tensorboard infos')
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints', help='save checkpoint infos')
-    parser.add_argument('--D_checkpoint', type=str, default='', help='mtviton checkpoint')
-    parser.add_argument('--mtviton_checkpoint', type=str, default='', help='mtviton checkpoint')
+    parser.add_argument('--D_checkpoint', type=str, default='', help='tocg checkpoint')
+    parser.add_argument('--tocg_checkpoint', type=str, default='', help='tocg checkpoint')
 
     parser.add_argument("--tensorboard_count", type=int, default=100)
     parser.add_argument("--display_count", type=int, default=100)
@@ -40,7 +40,7 @@ def get_opt():
     parser.add_argument("--semantic_nc", type=int, default=13)
     parser.add_argument("--output_nc", type=int, default=13)
     
-    # MTVITON
+    # Condition generator
     parser.add_argument("--warp_feature", choices=['encoder', 'T1'], default="T1")
     parser.add_argument("--out_layer", choices=['relu', 'conv'], default="relu")
     parser.add_argument("--clothmask_composition", type=str, choices=['no_composition', 'detach', 'warp_grad'], default='warp_grad')
@@ -62,12 +62,12 @@ def D_logit(pred):
     for i in pred:
         score += i[-1].mean((1,2,3)) / 2
     return score
-def get_const(opt, train_loader, mtviton, D, length):
+def get_const(opt, train_loader, tocg, D, length):
     # Model
     D.cuda()
     D.eval()
-    mtviton.cuda()
-    mtviton.eval()
+    tocg.cuda()
+    tocg.eval()
 
     logit_list = []
     i = 0
@@ -95,7 +95,7 @@ def get_const(opt, train_loader, mtviton, D, length):
             input1 = torch.cat([c_paired, cm_paired], 1)
             input2 = torch.cat([parse_agnostic, densepose], 1)
 
-            flow_list, fake_segmap, warped_cloth_paired, warped_clothmask_paired = mtviton(input1, input2)
+            flow_list, fake_segmap, warped_cloth_paired, warped_clothmask_paired = tocg(input1, input2)
             if opt.clothmask_composition != 'no_composition':
                 if opt.clothmask_composition == 'detach':
                     warped_cm_onehot = torch.FloatTensor((warped_clothmask_paired.detach().cpu().numpy() > 0.5).astype(np.float)).cuda()
@@ -145,13 +145,13 @@ def main():
     input1_nc = 4  # cloth + cloth-mask
     input2_nc = opt.semantic_nc + 3  # parse_agnostic + densepose
     D = define_D(input_nc=input1_nc + input2_nc + opt.output_nc, Ddownx2 = opt.Ddownx2, Ddropout = opt.Ddropout, n_layers_D=3, spectral = opt.spectral, num_D = opt.num_D)
-    mtviton = ConditionGenerator(opt, input1_nc=4, input2_nc=input2_nc, output_nc=opt.output_nc, ngf=96, norm_layer=nn.BatchNorm2d)
+    tocg = ConditionGenerator(opt, input1_nc=4, input2_nc=input2_nc, output_nc=opt.output_nc, ngf=96, norm_layer=nn.BatchNorm2d)
     # Load Checkpoint
     load_checkpoint(D, opt.D_checkpoint)
-    load_checkpoint(mtviton, opt.mtviton_checkpoint)
+    load_checkpoint(tocg, opt.tocg_checkpoint)
     
     
-    M = get_const(opt, train_loader, mtviton, D, length = len(train_dataset))
+    M = get_const(opt, train_loader, tocg, D, length = len(train_dataset))
     print("M:", M)
 
 

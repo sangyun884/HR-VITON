@@ -1,4 +1,3 @@
-# python3 test.py --Ddropout --Ddownx2 --mtviton_checkpoint __ --D_checkpoint __ --gpu_ids __ 
 import torch
 import torch.nn as nn
 
@@ -32,7 +31,7 @@ def get_opt():
 
     parser.add_argument('--tensorboard_dir', type=str, default='tensorboard', help='save tensorboard infos')
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints', help='save checkpoint infos')
-    parser.add_argument('--mtviton_checkpoint', type=str, default='', help='mtviton checkpoint')
+    parser.add_argument('--tocg_checkpoint', type=str, default='', help='tocg checkpoint')
     parser.add_argument('--D_checkpoint', type=str, default='', help='D checkpoint')
     
     parser.add_argument("--tensorboard_count", type=int, default=100)
@@ -63,18 +62,15 @@ def get_opt():
     return opt
 
 
-def test(opt, test_loader, board, mtviton, D=None):
-    """
-        Test MTVITON
-    """
+def test(opt, test_loader, board, tocg, D=None):
     # Model
-    mtviton.cuda()
-    mtviton.eval()
+    tocg.cuda()
+    tocg.eval()
     if D is not None:
         D.cuda()
         D.eval()
     
-    os.makedirs(os.path.join('./output', opt.mtviton_checkpoint.split('/')[-2], opt.mtviton_checkpoint.split('/')[-1],
+    os.makedirs(os.path.join('./output', opt.tocg_checkpoint.split('/')[-2], opt.tocg_checkpoint.split('/')[-1],
                              opt.datamode, opt.datasetting, 'multi-task'), exist_ok=True)
     num = 0
     iter_start_time = time.time()
@@ -104,7 +100,7 @@ def test(opt, test_loader, board, mtviton, D=None):
             input2 = torch.cat([parse_agnostic, densepose], 1)
 
             # forward
-            flow_list, fake_segmap, warped_cloth_paired, warped_clothmask_paired = mtviton(input1, input2)
+            flow_list, fake_segmap, warped_cloth_paired, warped_clothmask_paired = tocg(input1, input2)
             
             # warped cloth mask one hot 
             warped_cm_onehot = torch.FloatTensor((warped_clothmask_paired.detach().cpu().numpy() > 0.5).astype(np.float)).cuda()
@@ -141,8 +137,7 @@ def test(opt, test_loader, board, mtviton, D=None):
                             (im_c[i].cpu() / 2 + 0.5), parse_cloth_mask[i].cpu().expand(3, -1, -1), (warped_cloth_paired[i].cpu().detach() / 2 + 0.5), (warped_cm_onehot[i].cpu().detach()).expand(3, -1, -1),
                             visualize_segmap(label.cpu(), batch=i), visualize_segmap(fake_segmap.cpu(), batch=i), (im[i]/2 +0.5), (misalign[i].cpu().detach()).expand(3, -1, -1)],
                                 nrow=4)
-            #board.add_images(f'test_images/{i}', grid.unsqueeze(0), step + 1)
-            save_image(grid, os.path.join('./output', opt.mtviton_checkpoint.split('/')[-2], opt.mtviton_checkpoint.split('/')[-1],
+            save_image(grid, os.path.join('./output', opt.tocg_checkpoint.split('/')[-2], opt.tocg_checkpoint.split('/')[-1],
                              opt.datamode, opt.datasetting, 'multi-task',
                              (inputs['c_name']['paired'][i].split('.')[0] + '_' +
                               inputs['c_name']['unpaired'][i].split('.')[0] + '.png')))
@@ -152,7 +147,7 @@ def test(opt, test_loader, board, mtviton, D=None):
         D_score.sort(key=lambda x: x[1], reverse=True)
         # Save D_score
         for name, score in D_score:
-            f = open(os.path.join('./output', opt.mtviton_checkpoint.split('/')[-2], opt.mtviton_checkpoint.split('/')[-1],
+            f = open(os.path.join('./output', opt.tocg_checkpoint.split('/')[-2], opt.tocg_checkpoint.split('/')[-1],
                                 opt.datamode, opt.datasetting, 'multi-task', 'rejection_prob.txt'), 'a')
             f.write(name + ' ' + str(score) + '\n')
             f.close()
@@ -172,12 +167,12 @@ def main():
     # visualization
     if not os.path.exists(opt.tensorboard_dir):
         os.makedirs(opt.tensorboard_dir)
-    board = SummaryWriter(log_dir=os.path.join(opt.tensorboard_dir, opt.mtviton_checkpoint.split('/')[-2], opt.mtviton_checkpoint.split('/')[-1], opt.datamode, opt.datasetting))
+    board = SummaryWriter(log_dir=os.path.join(opt.tensorboard_dir, opt.tocg_checkpoint.split('/')[-2], opt.tocg_checkpoint.split('/')[-1], opt.datamode, opt.datasetting))
 
     # Model
     input1_nc = 4  # cloth + cloth-mask
     input2_nc = opt.semantic_nc + 3  # parse_agnostic + densepose
-    mtviton = ConditionGenerator(opt, input1_nc=input1_nc, input2_nc=input2_nc, output_nc=opt.output_nc, ngf=96, norm_layer=nn.BatchNorm2d)
+    tocg = ConditionGenerator(opt, input1_nc=input1_nc, input2_nc=input2_nc, output_nc=opt.output_nc, ngf=96, norm_layer=nn.BatchNorm2d)
     if not opt.D_checkpoint == '' and os.path.exists(opt.D_checkpoint):
         if opt.norm_const is None:
             raise NotImplementedError
@@ -185,11 +180,11 @@ def main():
     else:
         D = None
     # Load Checkpoint
-    load_checkpoint(mtviton, opt.mtviton_checkpoint)
+    load_checkpoint(tocg, opt.tocg_checkpoint)
     if not opt.D_checkpoint == '' and os.path.exists(opt.D_checkpoint):
         load_checkpoint(D, opt.D_checkpoint)
     # Train
-    test(opt, test_loader, board, mtviton, D=D)
+    test(opt, test_loader, board, tocg, D=D)
 
     print("Finished testing!")
 

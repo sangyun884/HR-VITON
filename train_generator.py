@@ -26,8 +26,6 @@ import torchgeometry as tgm
 def remove_overlap(seg_out, warped_cm):
     
     assert len(warped_cm.shape) == 4
-    # seg_out_onehot = F.softmax(seg_out * 100000, dim=1)[:, 1:, :, :] # Exclude the bg channel
-    # warped_cm = warped_cm - seg_out_onehot.sum(dim=1, keepdim=True) * warped_cm
     
     warped_cm = warped_cm - (torch.cat([seg_out[:, 1:3, :, :], seg_out[:, 5:, :, :]], dim=1)).sum(dim=1, keepdim=True) * warped_cm
     return warped_cm
@@ -51,7 +49,7 @@ def get_opt():
 
     parser.add_argument('--tensorboard_dir', type=str, default='tensorboard', help='save tensorboard infos')
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints', help='save checkpoint infos')
-    parser.add_argument('--mtviton_checkpoint', type=str, help='condition generator checkpoint')
+    parser.add_argument('--tocg_checkpoint', type=str, help='condition generator checkpoint')
     parser.add_argument('--gen_checkpoint', type=str, default='', help='gen checkpoint')
     parser.add_argument('--dis_checkpoint', type=str, default='', help='dis checkpoint')
 
@@ -101,7 +99,7 @@ def get_opt():
     # Training
     parser.add_argument('--GT', action='store_true')
     parser.add_argument('--occlusion', action='store_true')
-    # mtviton
+    # tocg
     # network
     parser.add_argument("--warp_feature", choices=['encoder', 'T1'], default="T1")
     parser.add_argument("--out_layer", choices=['relu', 'conv'], default="relu")
@@ -128,15 +126,15 @@ def get_opt():
     return opt
 
 
-def train(opt, train_loader, test_loader, test_vis_loader, board, mtviton, generator, discriminator, model):
+def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generator, discriminator, model):
     """
         Train Generator
     """
 
     # Model
     if not opt.GT:
-        mtviton.cuda()
-        mtviton.eval()
+        tocg.cuda()
+        tocg.eval()
     generator.train()
     discriminator.train()
     model.eval()
@@ -161,8 +159,8 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, mtviton, gener
     if opt.fp16:
         if not opt.GT:
             from apex import amp
-            [mtviton, generator, discriminator], [optimizer_gen, optimizer_dis] = amp.initialize(
-                [mtviton, generator, discriminator], [optimizer_gen, optimizer_dis], opt_level='O1', num_losses=2)
+            [tocg, generator, discriminator], [optimizer_gen, optimizer_dis] = amp.initialize(
+                [tocg, generator, discriminator], [optimizer_gen, optimizer_dis], opt_level='O1', num_losses=2)
         else:
             from apex import amp
             [generator, discriminator], [optimizer_gen, optimizer_dis] = amp.initialize(
@@ -170,13 +168,12 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, mtviton, gener
 
     if len(opt.gpu_ids) > 0:
         if not opt.GT:
-            mtviton = DataParallelWithCallback(mtviton, device_ids=opt.gpu_ids)
+            tocg = DataParallelWithCallback(tocg, device_ids=opt.gpu_ids)
         generator = DataParallelWithCallback(generator, device_ids=opt.gpu_ids)
         discriminator = DataParallelWithCallback(discriminator, device_ids=opt.gpu_ids)
         criterionGAN = DataParallelWithCallback(criterionGAN, device_ids=opt.gpu_ids)
         criterionFeat = DataParallelWithCallback(criterionFeat, device_ids=opt.gpu_ids)
         criterionVGG = DataParallelWithCallback(criterionVGG, device_ids=opt.gpu_ids)
-        #model = DataParallelWithCallback(model, device_ids=opt.gpu_ids)
         
     upsample = torch.nn.Upsample(scale_factor=4, mode='bilinear')
     gauss = tgm.image.GaussianBlur((15, 15), (3, 3))
@@ -213,7 +210,7 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, mtviton, gener
                 input2 = torch.cat([input_parse_agnostic_down, densepose_down], 1)
 
                 # forward
-                flow_list, fake_segmap, _, warped_clothmask_paired = mtviton(input1, input2)
+                flow_list, fake_segmap, _, warped_clothmask_paired = tocg(input1, input2)
                 
                 # warped cloth mask one hot 
                 warped_cm_onehot = torch.FloatTensor((warped_clothmask_paired.detach().cpu().numpy() > 0.5).astype(np.float)).cuda()
@@ -278,11 +275,9 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, mtviton, gener
         #                                              Train the generator
         # --------------------------------------------------------------------------------------------------------------
         output_paired = generator(torch.cat((agnostic, pose, warped_cloth_paired), dim=1), parse)
-        # print("parse:", parse.shape, "output_paired:", output_paired.shape)
+
         fake_concat = torch.cat((parse, output_paired), dim=1)
         real_concat = torch.cat((parse, im), dim=1)
-        # fake_concat = torch.cat((parse_rn, agnostic, pose, warped_cloth_paired, output_paired), dim=1)
-        # real_concat = torch.cat((parse_rn, agnostic, pose, warped_cloth_paired, im), dim=1)
         pred = discriminator(torch.cat((fake_concat, real_concat), dim=0))
 
         # the prediction contains the intermediate outputs of multiscale GAN,
@@ -299,7 +294,6 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, mtviton, gener
 
         G_losses = {}
         G_losses['GAN'] = criterionGAN(pred_fake, True, for_discriminator=False)
-        # G_losses['L1'] = criterionL1(output_paired * parse_rn[:, 2:3], warped_cloth_paired * parse_rn[:, 2:3]) * opt.lambda_l1
 
         if not opt.no_ganFeat_loss:
             num_D = len(pred_fake)
@@ -335,8 +329,6 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, mtviton, gener
 
         fake_concat = torch.cat((parse, output), dim=1)
         real_concat = torch.cat((parse, im), dim=1)
-        # fake_concat = torch.cat((parse_rn, agnostic, pose, warped_cloth_paired, output), dim=1)
-        # real_concat = torch.cat((parse_rn, agnostic, pose, warped_cloth_paired, im), dim=1)
         pred = discriminator(torch.cat((fake_concat, real_concat), dim=0))
 
         # the prediction contains the intermediate outputs of multiscale GAN,
@@ -414,7 +406,7 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, mtviton, gener
                     input2 = torch.cat([input_parse_agnostic_down, densepose_down], 1)
 
                     # forward
-                    flow_list, fake_segmap, _, warped_clothmask_paired = mtviton(input1, input2)
+                    flow_list, fake_segmap, _, warped_clothmask_paired = tocg(input1, input2)
                     
                     # warped cloth mask one hot 
                     warped_cm_onehot = torch.FloatTensor((warped_clothmask_paired.detach().cpu().numpy() > 0.5).astype(np.float)).cuda()
@@ -447,10 +439,7 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, mtviton, gener
                         warped_clothmask = remove_overlap(F.softmax(fake_parse_gauss, dim=1), warped_clothmask)
                         warped_cloth_paired = warped_cloth_paired * warped_clothmask + torch.ones_like(warped_cloth_paired) * (1-warped_clothmask)
                         warped_cloth_paired = warped_cloth_paired.detach()
-                    # region_mask = parse[:, 2:3] - warped_cm
-                    # region_mask[region_mask < 0.0] = 0.0
-                    # parse_rn = torch.cat((parse, region_mask), dim=1)
-                    # parse_rn[:, 2:3] -= region_mask
+
                 else:
                     # parse pre-process
                     fake_parse = parse_GT.argmax(dim=1)[:, None]
@@ -523,7 +512,7 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, mtviton, gener
                             input2 = torch.cat([input_parse_agnostic_down, densepose_down], 1)
 
                             # forward
-                            flow_list, fake_segmap, _, warped_clothmask_paired = mtviton(input1, input2)
+                            flow_list, fake_segmap, _, warped_clothmask_paired = tocg(input1, input2)
                             
                             # warped cloth mask one hot 
                             warped_cm_onehot = torch.FloatTensor((warped_clothmask_paired.detach().cpu().numpy() > 0.5).astype(np.float)).cuda()
@@ -557,10 +546,7 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, mtviton, gener
                                 warped_clothmask = remove_overlap(F.softmax(fake_parse_gauss, dim=1), warped_clothmask)
                                 warped_cloth_paired = warped_cloth_paired * warped_clothmask + torch.ones_like(warped_cloth_paired) * (1-warped_clothmask)
                                 warped_cloth_paired = warped_cloth_paired.detach()
-                            # region_mask = parse[:, 2:3] - warped_cm
-                            # region_mask[region_mask < 0.0] = 0.0
-                            # parse_rn = torch.cat((parse, region_mask), dim=1)
-                            # parse_rn[:, 2:3] -= region_mask
+
                         else:
                             # parse pre-process
                             fake_parse = parse_GT.argmax(dim=1)[:, None]
@@ -641,14 +627,14 @@ def main():
     board = SummaryWriter(log_dir=os.path.join(opt.tensorboard_dir, opt.name))
     
     # warping-seg Model
-    mtviton = None
+    tocg = None
     
     if not opt.GT:
         input1_nc = 4  # cloth + cloth-mask
         input2_nc = opt.semantic_nc + 3  # parse_agnostic + densepose
-        mtviton = ConditionGenerator(opt, input1_nc=input1_nc, input2_nc=input2_nc, output_nc=13, ngf=96, norm_layer=nn.BatchNorm2d)
+        tocg = ConditionGenerator(opt, input1_nc=input1_nc, input2_nc=input2_nc, output_nc=13, ngf=96, norm_layer=nn.BatchNorm2d)
         # Load Checkpoint
-        load_checkpoint(mtviton, opt.mtviton_checkpoint)
+        load_checkpoint(tocg, opt.tocg_checkpoint)
 
     # Generator model
     generator = SPADEGenerator(opt, 3+3+3)
@@ -668,7 +654,7 @@ def main():
         load_checkpoint(discriminator, opt.dis_checkpoint)
 
     # Train
-    train(opt, train_loader, test_loader, test_vis_loader, board, mtviton, generator, discriminator, model)
+    train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generator, discriminator, model)
 
     # Save Checkpoint
     save_checkpoint(generator, os.path.join(opt.checkpoint_dir, opt.name, 'gen_model_final.pth'))
