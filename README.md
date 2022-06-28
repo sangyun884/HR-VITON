@@ -1,7 +1,7 @@
 # HR-VITON &mdash; Official PyTorch Implementation
 <!-- This repository contains a PyTorch implementation for our paper "High-Resolution Virtual Try-On with Misalignment and Occlusion-Handled Conditions". -->
 
-![Teaser image](./figures/fig.png)
+![Teaser image](./figures/fig.jpg)
 
 > **High-Resolution Virtual Try-On with Misalignment and Occlusion-Handled Conditions**<br>
 > [Sangyun Lee](https://github.com/sangyun884)\*<sup>1</sup>, [Gyojung Gu](https://github.com/koo616)\*<sup>2,3</sup>, [Sunghyun Park](https://psh01087.github.io)<sup>2</sup>, [Seunghwan Choi](https://github.com/shadow2496)<sup>2</sup>, [Jaegul Choo](https://sites.google.com/site/jaegulchoo)<sup>2</sup><br>
