@@ -69,5 +69,5 @@ To use "--fp16" option, you should install apex library.
 If you find this work useful for your research, please cite our paper:
 
 ```
-{our bibtex}
+{To be added}
 ```
