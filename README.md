@@ -69,5 +69,10 @@ To use "--fp16" option, you should install apex library.
 If you find this work useful for your research, please cite our paper:
 
 ```
-{To be added}
+@inproceedings{lee2022hrviton,
+  title={High-Resolution Virtual Try-On with Misalignment and Occlusion-Handled Conditions},
+  author={Lee, Sangyun and Gu, Gyojung and Park, Sunghyun and Choi, Seunghwan and Choo, Jaegul},
+  booktitle={arXiv preprint},
+  year={2022}
+}
 ```
