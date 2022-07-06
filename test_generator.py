@@ -30,6 +30,7 @@ def get_opt():
     parser.add_argument('-b', '--batch-size', type=int, default=1)
     parser.add_argument('--fp16', action='store_true', help='use amp')
 
+    parser.add_argument('--test_name', type=str, default='test', help='test name')
     parser.add_argument("--dataroot", default="./data/zalando-hd-resize")
     parser.add_argument("--datamode", default="test")
     parser.add_argument("--data_list", default="./data/zalando-hd-resize/test_pairs.txt")
@@ -94,9 +95,9 @@ def test(opt, test_loader, board, tocg, generator):
     if opt.output_dir is not None:
         output_dir = opt.output_dir
     else:
-        output_dir = os.path.join('./output', opt.tocg_checkpoint.split('/')[-2], opt.tocg_checkpoint.split('/')[-1],
+        output_dir = os.path.join('./output', opt.test_name,
                             opt.datamode, opt.datasetting, 'generator', 'output')
-    grid_dir = os.path.join('./output', opt.tocg_checkpoint.split('/')[-2], opt.tocg_checkpoint.split('/')[-1],
+    grid_dir = os.path.join('./output', opt.test_name,
                              opt.datamode, opt.datasetting, 'generator', 'grid')
     
     os.makedirs(grid_dir, exist_ok=True)
@@ -222,7 +223,7 @@ def main():
     # visualization
     if not os.path.exists(opt.tensorboard_dir):
         os.makedirs(opt.tensorboard_dir)
-    board = SummaryWriter(log_dir=os.path.join(opt.tensorboard_dir, opt.tocg_checkpoint.split('/')[-2], opt.tocg_checkpoint.split('/')[-1], opt.datamode, opt.datasetting))
+    board = SummaryWriter(log_dir=os.path.join(opt.tensorboard_dir, opt.test_name, opt.datamode, opt.datasetting))
 
     ## Model
     # tocg
