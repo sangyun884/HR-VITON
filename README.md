@@ -6,9 +6,10 @@
 > **High-Resolution Virtual Try-On with Misalignment and Occlusion-Handled Conditions**<br>
 > [Sangyun Lee](https://github.com/sangyun884)\*<sup>1</sup>, [Gyojung Gu](https://github.com/koo616)\*<sup>2,3</sup>, [Sunghyun Park](https://psh01087.github.io)<sup>2</sup>, [Seunghwan Choi](https://github.com/shadow2496)<sup>2</sup>, [Jaegul Choo](https://sites.google.com/site/jaegulchoo)<sup>2</sup><br>
 > <sup>1</sup>Soongsil University, <sup>2</sup>KAIST, <sup>3</sup>Nestyle<br>
-> (* indicates equal contribution)
+> In ECCV 2022 (* indicates equal contribution)
 
 > Paper: https://arxiv.org/abs/2206.14180<br>
+> Project page: https://koo616.github.io/HR-VITON
 
 > **Abstract:** *Image-based virtual try-on aims to synthesize an image of a person wearing a given clothing item. To solve the task, the existing methods warp the clothing item to fit the person’s body and generate the segmentation map of the person wearing the item, before fusing the item with the person. However, when the warping and the segmentation generation stages operate individually without information exchange, the misalignment between the warped clothes and the segmentation map occurs, which leads to the artifacts in the final image. The information disconnection also causes excessive warping near the clothing regions occluded by the body parts, so called pixel-squeezing artifacts. To settle the issues, we propose a novel try-on condition generator as a unified module of the two stages (i.e., warping and segmentation generation stages). A newly proposed feature fusion block in the condition generator implements the information exchange, and the condition generator does not create any misalignment or pixel-squeezing artifacts. We also introduce discriminator rejection that filters out the incorrect segmentation map predictions and assures the performance of virtual try-on frameworks. Experiments on a high-resolution dataset demonstrate that our model successfully handles the misalignment and the occlusion, and significantly outperforms the baselines.*
 
@@ -70,10 +71,10 @@ To use "--fp16" option, you should install apex library.
 If you find this work useful for your research, please cite our paper:
 
 ```
-@inproceedings{lee2022hrviton,
+@article{lee2022high,
   title={High-Resolution Virtual Try-On with Misalignment and Occlusion-Handled Conditions},
   author={Lee, Sangyun and Gu, Gyojung and Park, Sunghyun and Choi, Seunghwan and Choo, Jaegul},
-  booktitle={arXiv preprint},
+  journal={arXiv preprint arXiv:2206.14180},
   year={2022}
 }
 ```
