@@ -66,6 +66,10 @@ This stage takes approximately 4 days with two RTX 3090 GPUs. Tested environment
 
 To use "--fp16" option, you should install apex library.
 
+## License
+
+All material is made available under [Creative Commons BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). You can **use, redistribute, and adapt** the material for **non-commercial purposes**, as long as you give appropriate credit by **citing our paper** and **indicate any changes** that you've made.
+
 ## Citation
 
 If you find this work useful for your research, please cite our paper:
