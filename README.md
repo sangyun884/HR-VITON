@@ -71,7 +71,7 @@ To use "--fp16" option, you should install apex library.
 If you find this work useful for your research, please cite our paper:
 
 ```
-@article{lee2022high,
+@article{lee2022hrviton,
   title={High-Resolution Virtual Try-On with Misalignment and Occlusion-Handled Conditions},
   author={Lee, Sangyun and Gu, Gyojung and Park, Sunghyun and Choi, Seunghwan and Choo, Jaegul},
   journal={arXiv preprint arXiv:2206.14180},
