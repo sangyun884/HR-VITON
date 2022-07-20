@@ -172,7 +172,7 @@ class CPDatasetTest(data.Dataset):
                 parse_onehot[0] += parse_map[label] * i
 
         # load image-parse-agnostic
-        image_parse_agnostic = Image.open(osp.join(self.data_path, 'image-parse-agnostic-v3', parse_name))
+        image_parse_agnostic = Image.open(osp.join(self.data_path, 'image-parse-agnostic-v3.2', parse_name))
         image_parse_agnostic = transforms.Resize(self.fine_width, interpolation=0)(image_parse_agnostic)
         parse_agnostic = torch.from_numpy(np.array(image_parse_agnostic)[None]).long()
         image_parse_agnostic = self.transform(image_parse_agnostic.convert('RGB'))

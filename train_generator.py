@@ -41,7 +41,7 @@ def get_opt():
 
     parser.add_argument("--dataroot", default="./data/")
     parser.add_argument("--datamode", default="train")
-    parser.add_argument("--data_list", default="train_pairs_zalando.txt")
+    parser.add_argument("--data_list", default="train_pairs.txt")
     parser.add_argument("--fine_width", type=int, default=768)
     parser.add_argument("--fine_height", type=int, default=1024)
     parser.add_argument("--radius", type=int, default=20)
@@ -64,7 +64,7 @@ def get_opt():
     # test
     parser.add_argument("--lpips_count", type=int, default=1000)
     parser.add_argument("--test_datasetting", default="paired")
-    parser.add_argument("--test_dataroot", default="./data/zalando-hd-resize")
+    parser.add_argument("--test_dataroot", default="./data/")
     parser.add_argument("--test_data_list", default="test_pairs.txt")
 
     # Hyper-parameters

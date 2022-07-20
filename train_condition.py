@@ -53,7 +53,7 @@ def get_opt():
 
     parser.add_argument("--dataroot", default="./data/")
     parser.add_argument("--datamode", default="train")
-    parser.add_argument("--data_list", default="train_pairs_zalando.txt")
+    parser.add_argument("--data_list", default="train_pairs.txt")
     parser.add_argument("--fine_width", type=int, default=192)
     parser.add_argument("--fine_height", type=int, default=256)
 
@@ -89,7 +89,7 @@ def get_opt():
     parser.add_argument("--no_test_visualize", action='store_true')    
     parser.add_argument("--num_test_visualize", type=int, default=3)
     parser.add_argument("--test_datasetting", default="unpaired")
-    parser.add_argument("--test_dataroot", default="./data/zalando-hd-resize")
+    parser.add_argument("--test_dataroot", default="./data/")
     parser.add_argument("--test_data_list", default="test_pairs.txt")
     
 

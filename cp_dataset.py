@@ -117,14 +117,15 @@ class CPDataset(data.Dataset):
 
     def __getitem__(self, index):
         im_name = self.im_names[index]
+        im_name = 'image/' + im_name
         c_name = {}
         c = {}
         cm = {}
         for key in ['paired']:
             c_name[key] = self.c_names[key][index]
-            c[key] = Image.open(osp.join(self.root, c_name[key])).convert('RGB')
+            c[key] = Image.open(osp.join(self.data_path, 'cloth', c_name[key])).convert('RGB')
             c[key] = transforms.Resize(self.fine_width, interpolation=2)(c[key])
-            cm[key] = Image.open(osp.join(self.root, c_name[key].replace('cloth', 'cloth-mask')))
+            cm[key] = Image.open(osp.join(self.data_path, 'cloth-mask', c_name[key]))
             cm[key] = transforms.Resize(self.fine_width, interpolation=0)(cm[key])
 
             c[key] = self.transform(c[key])  # [-1,1]
@@ -134,13 +135,13 @@ class CPDataset(data.Dataset):
             cm[key].unsqueeze_(0)
 
         # person image
-        im_pil_big = Image.open(osp.join(self.root, im_name))
+        im_pil_big = Image.open(osp.join(self.data_path, im_name))
         im_pil = transforms.Resize(self.fine_width, interpolation=2)(im_pil_big)
         im = self.transform(im_pil)
 
         # load parsing image
         parse_name = im_name.replace('image', 'image-parse-v3').replace('.jpg', '.png')
-        im_parse_pil_big = Image.open(osp.join(self.root, parse_name))
+        im_parse_pil_big = Image.open(osp.join(self.data_path, parse_name))
         im_parse_pil = transforms.Resize(self.fine_width, interpolation=0)(im_parse_pil_big)
         parse = torch.from_numpy(np.array(im_parse_pil)[None]).long()
         im_parse = self.transform(im_parse_pil.convert('RGB'))
@@ -176,7 +177,7 @@ class CPDataset(data.Dataset):
                 parse_onehot[0] += parse_map[label] * i
                 
         # load image-parse-agnostic
-        image_parse_agnostic = Image.open(osp.join(self.root, parse_name.replace('image-parse-v3', 'image-parse-agnostic-v3.2')))
+        image_parse_agnostic = Image.open(osp.join(self.data_path, parse_name.replace('image-parse-v3', 'image-parse-agnostic-v3.2')))
         image_parse_agnostic = transforms.Resize(self.fine_width, interpolation=0)(image_parse_agnostic)
         parse_agnostic = torch.from_numpy(np.array(image_parse_agnostic)[None]).long()
         image_parse_agnostic = self.transform(image_parse_agnostic.convert('RGB'))
@@ -195,13 +196,13 @@ class CPDataset(data.Dataset):
 
         # load pose points
         pose_name = im_name.replace('image', 'openpose_img').replace('.jpg', '_rendered.png')
-        pose_map = Image.open(osp.join(self.root, pose_name))
+        pose_map = Image.open(osp.join(self.data_path, pose_name))
         pose_map = transforms.Resize(self.fine_width, interpolation=2)(pose_map)
         pose_map = self.transform(pose_map)  # [-1,1]
         
         # pose name
         pose_name = im_name.replace('image', 'openpose_json').replace('.jpg', '_keypoints.json')
-        with open(osp.join(self.root, pose_name), 'r') as f:
+        with open(osp.join(self.data_path, pose_name), 'r') as f:
             pose_label = json.load(f)
             pose_data = pose_label['people'][0]['pose_keypoints_2d']
             pose_data = np.array(pose_data)
@@ -209,7 +210,7 @@ class CPDataset(data.Dataset):
         
         # load densepose
         densepose_name = im_name.replace('image', 'image-densepose')
-        densepose_map = Image.open(osp.join(self.root, densepose_name))
+        densepose_map = Image.open(osp.join(self.data_path, densepose_name))
         densepose_map = transforms.Resize(self.fine_width, interpolation=2)(densepose_map)
         densepose_map = self.transform(densepose_map)  # [-1,1]
 
@@ -342,7 +343,7 @@ class CPDatasetTest(data.Dataset):
                 parse_onehot[0] += parse_map[label] * i
 
         # load image-parse-agnostic
-        image_parse_agnostic = Image.open(osp.join(self.data_path, 'image-parse-agnostic-v3', parse_name))
+        image_parse_agnostic = Image.open(osp.join(self.data_path, 'image-parse-agnostic-v3.2', parse_name))
         image_parse_agnostic = transforms.Resize(self.fine_width, interpolation=0)(image_parse_agnostic)
         parse_agnostic = torch.from_numpy(np.array(image_parse_agnostic)[None]).long()
         image_parse_agnostic = self.transform(image_parse_agnostic.convert('RGB'))
