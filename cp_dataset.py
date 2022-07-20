@@ -40,8 +40,8 @@ class CPDataset(data.Dataset):
 
         self.im_names = im_names
         self.c_names = dict()
-        self.c_names['paired'] = c_names
-        self.c_names['unpaired'] = im_names
+        self.c_names['paired'] = im_names
+        self.c_names['unpaired'] = c_names
 
     def name(self):
         return "CPDataset"
