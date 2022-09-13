@@ -95,7 +95,7 @@ class ConditionGenerator(nn.Module):
     def normalize(self, x):
         return x
     
-    def forward(self, input1, input2, upsample='bilinear'):
+    def forward(self,opt,input1, input2, upsample='bilinear'):
         E1_list = []
         E2_list = []
         flow_list = []
@@ -113,7 +113,7 @@ class ConditionGenerator(nn.Module):
         # Compute Clothflow
         for i in range(5):
             N, _, iH, iW = E1_list[4 - i].size()
-            grid = make_grid(N, iH, iW)
+            grid = make_grid(N, iH, iW,opt)
 
             if i == 0:
                 T1 = E1_list[4 - i]  # (ngf * 4) x 8 x 6
@@ -145,7 +145,7 @@ class ConditionGenerator(nn.Module):
         
  
         N, _, iH, iW = input1.size()
-        grid = make_grid(N, iH, iW)
+        grid = make_grid(N, iH, iW,opt)
         
         flow = F.interpolate(flow_list[-1].permute(0, 3, 1, 2), scale_factor=2, mode=upsample).permute(0, 2, 3, 1)
         flow_norm = torch.cat([flow[:, :, :, 0:1] / ((iW/2 - 1.0) / 2.0), flow[:, :, :, 1:2] / ((iH/2 - 1.0) / 2.0)], 3)
@@ -158,10 +158,13 @@ class ConditionGenerator(nn.Module):
 
         return flow_list, x, warped_c, warped_cm
 
-def make_grid(N, iH, iW):
+def make_grid(N, iH, iW,opt):
     grid_x = torch.linspace(-1.0, 1.0, iW).view(1, 1, iW, 1).expand(N, iH, -1, -1)
     grid_y = torch.linspace(-1.0, 1.0, iH).view(1, iH, 1, 1).expand(N, -1, iW, -1)
-    grid = torch.cat([grid_x, grid_y], 3).cuda()
+    if opt.cuda :
+        grid = torch.cat([grid_x, grid_y], 3).cuda()
+    else:
+        grid = torch.cat([grid_x, grid_y], 3)
     return grid
 
 
@@ -229,10 +232,11 @@ class Vgg19(nn.Module):
     
 
 class VGGLoss(nn.Module):
-    def __init__(self, layids = None):
+    def __init__(self, opt,layids = None):
         super(VGGLoss, self).__init__()
         self.vgg = Vgg19()
-        self.vgg.cuda()
+        if opt.cuda:
+            self.vgg.cuda()
         self.criterion = nn.L1Loss()
         self.weights = [1.0/32, 1.0/16, 1.0/8, 1.0/4, 1.0]
         self.layids = layids
@@ -404,19 +408,21 @@ class NLayerDiscriminator(nn.Module):
             return self.model(input)
 
 
-def save_checkpoint(model, save_path):
+def save_checkpoint(model, save_path,opt):
     if not os.path.exists(os.path.dirname(save_path)):
         os.makedirs(os.path.dirname(save_path))
 
     torch.save(model.cpu().state_dict(), save_path)
-    model.cuda()
+    if opt.cuda :
+        model.cuda()
 
-def load_checkpoint(model, checkpoint_path):
+def load_checkpoint(model, checkpoint_path,opt):
     if not os.path.exists(checkpoint_path):
         print('no checkpoint')
         raise
     log = model.load_state_dict(torch.load(checkpoint_path), strict=False)
-    model.cuda()
+    if opt.cuda :
+        model.cuda()
 
 
 def weights_init(m):

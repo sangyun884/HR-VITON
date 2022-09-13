@@ -38,6 +38,8 @@ def get_opt():
     parser.add_argument('-j', '--workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=8)
     parser.add_argument('--fp16', action='store_true', help='use amp')
+    # Cuda availability
+    parser.add_argument('--cuda',default=False, help='cuda or cpu')
 
     parser.add_argument("--dataroot", default="./data/")
     parser.add_argument("--datamode", default="train")
@@ -146,7 +148,7 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
         criterionGAN = GANLoss('hinge', tensor=torch.cuda.FloatTensor)
     # criterionL1 = nn.L1Loss()
     criterionFeat = nn.L1Loss()
-    criterionVGG = VGGLoss()
+    criterionVGG = VGGLoss(opt)
 
     # optimizer
     optimizer_gen = torch.optim.Adam(generator.parameters(), lr=opt.G_lr, betas=(0, 0.9))
@@ -228,7 +230,7 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
                         
                 # warped cloth
                 N, _, iH, iW = c_paired.shape
-                grid = make_grid(N, iH, iW)
+                grid = make_grid(N, iH, iW,opt)
                 flow = F.interpolate(flow_list[-1].permute(0, 3, 1, 2), size=(iH, iW), mode='bilinear').permute(0, 2, 3, 1)
                 flow_norm = torch.cat([flow[:, :, :, 0:1] / ((96 - 1.0) / 2.0), flow[:, :, :, 1:2] / ((128 - 1.0) / 2.0)], 3)
                 warped_grid = grid + flow_norm
@@ -424,7 +426,7 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
                             
                     # warped cloth
                     N, _, iH, iW = c_paired.shape
-                    grid = make_grid(N, iH, iW)
+                    grid = make_grid(N, iH, iW,opt)
                     flow = F.interpolate(flow_list[-1].permute(0, 3, 1, 2), size=(iH, iW), mode='bilinear').permute(0, 2, 3, 1)
                     flow_norm = torch.cat([flow[:, :, :, 0:1] / ((96 - 1.0) / 2.0), flow[:, :, :, 1:2] / ((128 - 1.0) / 2.0)], 3)
                     warped_grid = grid + flow_norm
@@ -533,7 +535,7 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
                             flow = F.interpolate(flow_list[-1].permute(0, 3, 1, 2), size=(iH, iW), mode='bilinear').permute(0, 2, 3, 1)
                             flow_norm = torch.cat([flow[:, :, :, 0:1] / ((96 - 1.0) / 2.0), flow[:, :, :, 1:2] / ((128 - 1.0) / 2.0)], 3)
                             
-                            grid = make_grid(N, iH, iW)
+                            grid = make_grid(N, iH, iW,opt)
                             warped_grid = grid + flow_norm
                             warped_cloth_paired = F.grid_sample(c_paired, warped_grid, padding_mode='border').detach()
                             warped_clothmask = F.grid_sample(cm, warped_grid, padding_mode='border')
@@ -588,8 +590,8 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
                      D_losses['D_Fake'].mean().item(), D_losses['D_Real'].mean().item()), flush=True)
 
         if (step + 1) % opt.save_count == 0:
-            save_checkpoint(generator.module, os.path.join(opt.checkpoint_dir, opt.name, 'gen_step_%06d.pth' % (step + 1)))
-            save_checkpoint(discriminator.module, os.path.join(opt.checkpoint_dir, opt.name, 'dis_step_%06d.pth' % (step + 1)))
+            save_checkpoint(generator.module, os.path.join(opt.checkpoint_dir, opt.name, 'gen_step_%06d.pth' % (step + 1)),opt)
+            save_checkpoint(discriminator.module, os.path.join(opt.checkpoint_dir, opt.name, 'dis_step_%06d.pth' % (step + 1)),opt)
 
         if (step + 1) % 1000 == 0:
             scheduler_gen.step()
@@ -657,8 +659,8 @@ def main():
     train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generator, discriminator, model)
 
     # Save Checkpoint
-    save_checkpoint(generator, os.path.join(opt.checkpoint_dir, opt.name, 'gen_model_final.pth'))
-    save_checkpoint(discriminator, os.path.join(opt.checkpoint_dir, opt.name, 'dis_model_final.pth'))
+    save_checkpoint(generator, os.path.join(opt.checkpoint_dir, opt.name, 'gen_model_final.pth'),opt)
+    save_checkpoint(discriminator, os.path.join(opt.checkpoint_dir, opt.name, 'dis_model_final.pth'),opt)
 
     print("Finished training %s!" % opt.name)
 
