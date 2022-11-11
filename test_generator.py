@@ -29,20 +29,22 @@ def get_opt():
     parser.add_argument('-j', '--workers', type=int, default=4)
     parser.add_argument('-b', '--batch-size', type=int, default=1)
     parser.add_argument('--fp16', action='store_true', help='use amp')
+    # Cuda availability
+    parser.add_argument('--cuda',default=False, help='cuda or cpu')
 
     parser.add_argument('--test_name', type=str, default='test', help='test name')
     parser.add_argument("--dataroot", default="./data/zalando-hd-resize")
     parser.add_argument("--datamode", default="test")
-    parser.add_argument("--data_list", default="./data/zalando-hd-resize/test_pairs.txt")
-    parser.add_argument("--output_dir", type=str)
-    parser.add_argument("--datasetting", default="paired")
+    parser.add_argument("--data_list", default="test_pairs.txt")
+    parser.add_argument("--output_dir", type=str, default="./Output")
+    parser.add_argument("--datasetting", default="unpaired")
     parser.add_argument("--fine_width", type=int, default=768)
     parser.add_argument("--fine_height", type=int, default=1024)
 
-    parser.add_argument('--tensorboard_dir', type=str, default='tensorboard', help='save tensorboard infos')
+    parser.add_argument('--tensorboard_dir', type=str, default='./data/zalando-hd-resize/tensorboard', help='save tensorboard infos')
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints', help='save checkpoint infos')
-    parser.add_argument('--tocg_checkpoint', type=str, default='', help='tocg checkpoint')
-    parser.add_argument('--gen_checkpoint', type=str, default='./gen_step_110000.pth', help='G checkpoint')  
+    parser.add_argument('--tocg_checkpoint', type=str, default='./eval_models/weights/v0.1/mtviton.pth', help='tocg checkpoint')
+    parser.add_argument('--gen_checkpoint', type=str, default='./eval_models/weights/v0.1/gen.pth', help='G checkpoint')
 
     parser.add_argument("--tensorboard_count", type=int, default=100)
     parser.add_argument("--shuffle", action='store_true', help='shuffle input data')
@@ -72,7 +74,7 @@ def get_opt():
     opt = parser.parse_args()
     return opt
 
-def load_checkpoint_G(model, checkpoint_path):
+def load_checkpoint_G(model, checkpoint_path,opt):
     if not os.path.exists(checkpoint_path):
         print("Invalid path!")
         return
@@ -80,15 +82,19 @@ def load_checkpoint_G(model, checkpoint_path):
     new_state_dict = OrderedDict([(k.replace('ace', 'alias').replace('.Spade', ''), v) for (k, v) in state_dict.items()])
     new_state_dict._metadata = OrderedDict([(k.replace('ace', 'alias').replace('.Spade', ''), v) for (k, v) in state_dict._metadata.items()])
     model.load_state_dict(new_state_dict, strict=True)
-    model.cuda()
+    if opt.cuda :
+        model.cuda()
 
 
-def test(opt, test_loader, board, tocg, generator):
+
+def test(opt, test_loader, tocg, generator):
     gauss = tgm.image.GaussianBlur((15, 15), (3, 3))
-    gauss = gauss.cuda()
+    if opt.cuda:
+        gauss = gauss.cuda()
     
     # Model
-    tocg.cuda()
+    if opt.cuda :
+        tocg.cuda()
     tocg.eval()
     generator.eval()
     
@@ -108,17 +114,30 @@ def test(opt, test_loader, board, tocg, generator):
     iter_start_time = time.time()
     with torch.no_grad():
         for inputs in test_loader.data_loader:
-            
-            pose_map = inputs['pose'].cuda()
-            pre_clothes_mask = inputs['cloth_mask'][opt.datasetting].cuda()
-            label = inputs['parse']
-            parse_agnostic = inputs['parse_agnostic']
-            agnostic = inputs['agnostic'].cuda()
-            clothes = inputs['cloth'][opt.datasetting].cuda() # target cloth
-            densepose = inputs['densepose'].cuda()
-            im = inputs['image']
-            input_label, input_parse_agnostic = label.cuda(), parse_agnostic.cuda()
-            pre_clothes_mask = torch.FloatTensor((pre_clothes_mask.detach().cpu().numpy() > 0.5).astype(np.float)).cuda()
+
+            if opt.cuda :
+                pose_map = inputs['pose'].cuda()
+                pre_clothes_mask = inputs['cloth_mask'][opt.datasetting].cuda()
+                label = inputs['parse']
+                parse_agnostic = inputs['parse_agnostic']
+                agnostic = inputs['agnostic'].cuda()
+                clothes = inputs['cloth'][opt.datasetting].cuda() # target cloth
+                densepose = inputs['densepose'].cuda()
+                im = inputs['image']
+                input_label, input_parse_agnostic = label.cuda(), parse_agnostic.cuda()
+                pre_clothes_mask = torch.FloatTensor((pre_clothes_mask.detach().cpu().numpy() > 0.5).astype(np.float)).cuda()
+            else :
+                pose_map = inputs['pose']
+                pre_clothes_mask = inputs['cloth_mask'][opt.datasetting]
+                label = inputs['parse']
+                parse_agnostic = inputs['parse_agnostic']
+                agnostic = inputs['agnostic']
+                clothes = inputs['cloth'][opt.datasetting] # target cloth
+                densepose = inputs['densepose']
+                im = inputs['image']
+                input_label, input_parse_agnostic = label, parse_agnostic
+                pre_clothes_mask = torch.FloatTensor((pre_clothes_mask.detach().cpu().numpy() > 0.5).astype(np.float))
+
 
 
             # down
@@ -137,11 +156,14 @@ def test(opt, test_loader, board, tocg, generator):
             input2 = torch.cat([input_parse_agnostic_down, densepose_down], 1)
 
             # forward
-            flow_list, fake_segmap, warped_cloth_paired, warped_clothmask_paired = tocg(input1, input2)
+            flow_list, fake_segmap, warped_cloth_paired, warped_clothmask_paired = tocg(opt,input1, input2)
             
-            # warped cloth mask one hot 
-            warped_cm_onehot = torch.FloatTensor((warped_clothmask_paired.detach().cpu().numpy() > 0.5).astype(np.float)).cuda()
-            
+            # warped cloth mask one hot
+            if opt.cuda :
+                warped_cm_onehot = torch.FloatTensor((warped_clothmask_paired.detach().cpu().numpy() > 0.5).astype(np.float)).cuda()
+            else :
+                warped_cm_onehot = torch.FloatTensor((warped_clothmask_paired.detach().cpu().numpy() > 0.5).astype(np.float))
+
             if opt.clothmask_composition != 'no_composition':
                 if opt.clothmask_composition == 'detach':
                     cloth_mask = torch.ones_like(fake_segmap)
@@ -156,8 +178,11 @@ def test(opt, test_loader, board, tocg, generator):
             # make generator input parse map
             fake_parse_gauss = gauss(F.interpolate(fake_segmap, size=(opt.fine_height, opt.fine_width), mode='bilinear'))
             fake_parse = fake_parse_gauss.argmax(dim=1)[:, None]
-            
-            old_parse = torch.FloatTensor(fake_parse.size(0), 13, opt.fine_height, opt.fine_width).zero_().cuda()
+
+            if opt.cuda :
+                old_parse = torch.FloatTensor(fake_parse.size(0), 13, opt.fine_height, opt.fine_width).zero_().cuda()
+            else:
+                old_parse = torch.FloatTensor(fake_parse.size(0), 13, opt.fine_height, opt.fine_width).zero_()
             old_parse.scatter_(1, fake_parse, 1.0)
 
             labels = {
@@ -169,7 +194,10 @@ def test(opt, test_loader, board, tocg, generator):
                 5:  ['right_arm',   [6]],
                 6:  ['noise',       [12]]
             }
-            parse = torch.FloatTensor(fake_parse.size(0), 7, opt.fine_height, opt.fine_width).zero_().cuda()
+            if opt.cuda :
+                parse = torch.FloatTensor(fake_parse.size(0), 7, opt.fine_height, opt.fine_width).zero_().cuda()
+            else:
+                parse = torch.FloatTensor(fake_parse.size(0), 7, opt.fine_height, opt.fine_width).zero_()
             for i in range(len(labels)):
                 for label in labels[i][1]:
                     parse[:, i] += old_parse[:, label]
@@ -179,7 +207,7 @@ def test(opt, test_loader, board, tocg, generator):
             flow = F.interpolate(flow_list[-1].permute(0, 3, 1, 2), size=(iH, iW), mode='bilinear').permute(0, 2, 3, 1)
             flow_norm = torch.cat([flow[:, :, :, 0:1] / ((96 - 1.0) / 2.0), flow[:, :, :, 1:2] / ((128 - 1.0) / 2.0)], 3)
             
-            grid = make_grid(N, iH, iW)
+            grid = make_grid(N, iH, iW,opt)
             warped_grid = grid + flow_norm
             warped_cloth = F.grid_sample(clothes, warped_grid, padding_mode='border')
             warped_clothmask = F.grid_sample(pre_clothes_mask, warped_grid, padding_mode='border')
@@ -221,9 +249,9 @@ def main():
     test_loader = CPDataLoader(opt, test_dataset)
     
     # visualization
-    if not os.path.exists(opt.tensorboard_dir):
-        os.makedirs(opt.tensorboard_dir)
-    board = SummaryWriter(log_dir=os.path.join(opt.tensorboard_dir, opt.test_name, opt.datamode, opt.datasetting))
+    # if not os.path.exists(opt.tensorboard_dir):
+    #     os.makedirs(opt.tensorboard_dir)
+    # board = SummaryWriter(log_dir=os.path.join(opt.tensorboard_dir, opt.test_name, opt.datamode, opt.datasetting))
 
     ## Model
     # tocg
@@ -237,11 +265,11 @@ def main():
     generator.print_network()
        
     # Load Checkpoint
-    load_checkpoint(tocg, opt.tocg_checkpoint)
-    load_checkpoint_G(generator, opt.gen_checkpoint)
+    load_checkpoint(tocg, opt.tocg_checkpoint,opt)
+    load_checkpoint_G(generator, opt.gen_checkpoint,opt)
 
     # Train
-    test(opt, test_loader, board, tocg, generator)
+    test(opt, test_loader, tocg, generator)
 
     print("Finished testing!")
 

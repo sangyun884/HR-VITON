@@ -76,6 +76,8 @@ def get_opt():
     parser.add_argument('--Ddownx2', action='store_true', help="Downsample D's input to increase the receptive field")  
     parser.add_argument('--Ddropout', action='store_true', help="Apply dropout to D")
     parser.add_argument('--num_D', type=int, default=2, help='Generator ngf')
+    # Cuda availability
+    parser.add_argument('--cuda',default=False, help='cuda or cpu')
     # training
     parser.add_argument("--G_D_seperate", action='store_true')
     parser.add_argument("--no_GAN_loss", action='store_true')
@@ -117,7 +119,7 @@ def train(opt, train_loader, test_loader, val_loader, board, tocg, D):
 
     # criterion
     criterionL1 = nn.L1Loss()
-    criterionVGG = VGGLoss()
+    criterionVGG = VGGLoss(opt)
     if opt.fp16:
         criterionGAN = GANLoss(use_lsgan=True, tensor=torch.cuda.HalfTensor)
     else :
@@ -442,8 +444,8 @@ def train(opt, train_loader, test_loader, val_loader, board, tocg, D):
 
         # save
         if (step + 1) % opt.save_count == 0:
-            save_checkpoint(tocg, os.path.join(opt.checkpoint_dir, opt.name, 'tocg_step_%06d.pth' % (step + 1)))
-            save_checkpoint(D, os.path.join(opt.checkpoint_dir, opt.name, 'D_step_%06d.pth' % (step + 1)))
+            save_checkpoint(tocg, os.path.join(opt.checkpoint_dir, opt.name, 'tocg_step_%06d.pth' % (step + 1)),opt)
+            save_checkpoint(D, os.path.join(opt.checkpoint_dir, opt.name, 'D_step_%06d.pth' % (step + 1)),opt)
 
 def main():
     opt = get_opt()
@@ -487,8 +489,8 @@ def main():
     train(opt, train_loader, val_loader, test_loader, board, tocg, D)
 
     # Save Checkpoint
-    save_checkpoint(tocg, os.path.join(opt.checkpoint_dir, opt.name, 'tocg_final.pth'))
-    save_checkpoint(D, os.path.join(opt.checkpoint_dir, opt.name, 'D_final.pth'))
+    save_checkpoint(tocg, os.path.join(opt.checkpoint_dir, opt.name, 'tocg_final.pth'),opt)
+    save_checkpoint(D, os.path.join(opt.checkpoint_dir, opt.name, 'D_final.pth'),opt)
     print("Finished training %s!" % opt.name)
 
 
